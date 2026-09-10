@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>火柴人对决 - 暗黑森林</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; }
+  #game-container {
+    position: relative; width: 100%; height: 100dvh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  canvas { background: #000; display: block; width: 100%; max-width: 480px; height: auto; touch-action: none; }
+  
+  /* --- 开始界面 UI --- */
+  .start-screen {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: #080510; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 20; padding: 20px; transition: opacity 0.3s;
+  }
+  .start-screen h1 { color: #a855f7; font-size: 28px; margin-bottom: 30px; text-shadow: 0 0 15px rgba(168, 85, 247, 0.6); }
+  .input-group { width: 100%; max-width: 300px; margin-bottom: 20px; }
+  .input-group label { display: block; color: #94a3b8; font-size: 14px; margin-bottom: 8px; }
+  .input-group input {
+    width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #4c1d95;
+    background: #0f0a1a; color: #fff; font-size: 16px; text-align: center;
+    outline: none; transition: border-color 0.2s;
+  }
+  .input-group input:focus { border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
+  .start-btn {
+    width: 100%; max-width: 300px; padding: 14px; margin-top: 10px;
+    border-radius: 8px; border: none; background: #a855f7; color: #fff;
+    font-size: 18px; font-weight: bold; cursor: pointer; transition: transform 0.1s, background 0.2s;
+    box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4);
+  }
+  .start-btn:active { transform: scale(0.96); background: #9333ea; }
+  .hidden { display: none !important; }
+
+  /* 界面UI */
+  .ui { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; pointer-events: none; color: #fff; font-weight: bold; z-index: 5;}
+  .ui .health-bar { width: 120px; height: 16px; background: #222; border-radius: 8px; overflow: hidden; margin-bottom: 4px; border: 1px solid #4c1d95; }
+  .ui .health-bar .fill { height: 100%; transition: width 0.1s; }
+  .ui .p1 .fill { background: #4ade80; }
+  .ui .p2 .fill { background: #f87171; }
+  .ui .p2 { text-align: right; }
+  
+  /* 底部操作区（适应弧形布局） */
+  .controls { 
+    position: absolute; 
+    bottom: 20px; 
+    right: 20px; 
+    width: 210px; 
+    height: 210px; 
+    pointer-events: none; 
+    z-index: 10;
+  }
+  
+  .skills { 
+    position: relative; 
+    width: 100%; 
+    height: 100%; 
+    pointer-events: auto; 
+  }
+  
+  /* --- 技能按钮通用样式（青铜金属质感，暗黑调） --- */
+  .skill-btn {
+    position: absolute;
+    border-radius: 50%;
+    /* 金属青铜质感背景，稍微调暗以适应暗黑森林 */
+    background: radial-gradient(circle at 30% 30%, #3d2b1f, #0d0805);
+    /* 金色边框 */
+    border: 2px solid #8b6d3f;
+    /* 内外阴影塑造3D感 */
+    box-shadow: 0 4px 8px rgba(0,0,0,0.9), inset 0 0 15px rgba(0,0,0,0.9), 0 0 10px rgba(139, 109, 63, 0.2);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    user-select: none; cursor: pointer; touch-action: none; 
+    transition: transform 0.1s, box-shadow 0.2s;
+    overflow: hidden;
+  }
+  
+  .skill-btn:active { transform: scale(0.9); box-shadow: 0 0 5px rgba(139, 109, 63, 0.6); }
+  
+  /* 技能图标 */
+  .skill-icon { 
+    font-size: 22px; 
+    position: absolute; 
+    top: 8px; 
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8)); 
+    transition: opacity 0.2s, filter 0.2s;
+  }
+  
+  /* 技能名字 */
+  .skill-label { 
+    font-size: 11px; 
+    color: #c9b07a; 
+    position: absolute; 
+    bottom: 6px; 
+    font-weight: bold; 
+    text-shadow: 1px 1px 2px #000; 
+    transition: color 0.2s;
+  }
+  
+  /* 冷却倒计时数字 */
+  .cooldown-text { 
+    position: absolute; 
+    top: 50%; left: 50%; 
+    transform: translate(-50%, -50%); 
+    font-size: 26px; 
+    font-weight: 900; 
+    color: #ffffff; 
+    text-shadow: 0 2px 6px #000, 0 0 12px rgba(0,0,0,0.9); 
+    z-index: 5; 
+    display: none; 
+    font-family: 'Arial Black', Arial, sans-serif;
+  }
+  
+  /* 冷却状态 */
+  .skill-btn.cooldown::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.75); border-radius: 50%; z-index: 4;
+  }
+  .skill-btn.cooldown .cooldown-text { display: block; }
+  .skill-btn.cooldown .skill-icon { opacity: 0.2; filter: grayscale(1); }
+  .skill-btn.cooldown .skill-label { color: #555; text-shadow: none; }
+  
+  /* --- 扇形布局的绝对定位坐标 --- */
+  /* 1. 普攻（右下角）稍大 */
+  .skill-btn.skill4 { width: 84px; height: 84px; bottom: 0px; right: 0px; z-index: 3; border-color: #9ca3af; box-shadow: 0 0 15px rgba(156,163,175,0.2), inset 0 0 20px rgba(0,0,0,0.9); }
+  .skill-btn.skill4 .skill-icon { font-size: 28px; top: 12px; }
+  .skill-btn.skill4 .skill-label { bottom: 10px; font-size: 12px; }
+  
+  /* 2. 突进（左下） */
+  .skill-btn.skill1 { width: 66px; height: 66px; bottom: 10px; right: 100px; z-index: 2; border-color: #3b82f6; box-shadow: 0 0 15px rgba(59,130,246,0.2), inset 0 0 20px rgba(0,0,0,0.9); }
+  
+  /* 3. 护盾（左上方） */
+  .skill-btn.skill2 { width: 66px; height: 66px; bottom: 80px; right: 60px; z-index: 1; border-color: #f59e0b; box-shadow: 0 0 15px rgba(245,158,11,0.2), inset 0 0 20px rgba(0,0,0,0.9); }
+  
+  /* 4. 震荡（正上方） */
+  .skill-btn.skill3 { width: 66px; height: 66px; bottom: 120px; right: 0px; z-index: 1; border-color: #ec4899; box-shadow: 0 0 15px rgba(236,72,153,0.2), inset 0 0 20px rgba(0,0,0,0.9); }
+
+  /* 动态浮动摇杆 */
+  .joystick-area {
+    position: absolute; width: 120px; height: 120px; 
+    background: rgba(255,255,255,0.03); border-radius: 50%; 
+    border: 2px dashed rgba(168, 85, 247, 0.4); 
+    pointer-events: none; z-index: 100; display: none;
+  }
+  .joystick-knob { 
+    width: 50px; height: 50px; background: rgba(168, 85, 247, 0.3); 
+    border: 1px solid rgba(168, 85, 247, 0.6);
+    border-radius: 50%; position: absolute; top: 50%; left: 50%; 
+    transform: translate(-50%, -50%); 
+  }
+
+  .game-over { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(5, 0, 10, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; z-index: 10; }
+  .game-over h1 { font-size: 28px; margin-bottom: 20px; text-shadow: 0 0 15px rgba(168, 85, 247, 0.6); text-align: center; padding: 0 20px; line-height: 1.5; }
+  .game-over button { padding: 12px 24px; font-size: 18px; background: #a855f7; border: none; border-radius: 8px; color: #fff; font-weight: bold; pointer-events: auto; cursor: pointer; transition: transform 0.1s; }
+  .game-over button:active { transform: scale(0.95); }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <!-- 开始界面 -->
+  <div class="start-screen" id="startScreen">
+    <h1>火柴人对决</h1>
+    <div class="input-group">
+      <label>己方名字 (1-4字，中文或英文)</label>
+      <input type="text" id="playerNameInput" maxlength="4" placeholder="留空则为普通火柴人">
+    </div>
+    <div class="input-group">
+      <label>敌方名字 (1-4字，中文或英文)</label>
+      <input type="text" id="enemyNameInput" maxlength="4" placeholder="留空则为普通火柴人">
+    </div>
+    <button class="start-btn" id="startBtn">开始游戏</button>
+  </div>
+
+  <div class="ui">
+    <div class="p1">
+      <div style="font-size:12px" id="p1NameLabel">你</div>
+      <div class="health-bar"><div class="fill" id="hp1" style="width:100%"></div></div>
+    </div>
+    <div class="p2">
+      <div style="font-size:12px" id="p2NameLabel">敌人</div>
+      <div class="health-bar"><div class="fill" id="hp2" style="width:100%"></div></div>
+    </div>
+  </div>
+  
+  <canvas id="game" width="480" height="600"></canvas>
+  
+  <div class="controls">
+    <!-- 扇形技能面板 -->
+    <div class="skills">
+      <div class="skill-btn skill1" id="skill1">
+        <span class="skill-icon">⚡</span>
+        <span class="cooldown-text" id="cd1">3</span>
+        <span class="skill-label">突进</span>
+      </div>
+      <div class="skill-btn skill2" id="skill2">
+        <span class="skill-icon">🛡️</span>
+        <span class="cooldown-text" id="cd2">8</span>
+        <span class="skill-label">护盾</span>
+      </div>
+      <div class="skill-btn skill3" id="skill3">
+        <span class="skill-icon">💥</span>
+        <span class="cooldown-text" id="cd3">5</span>
+        <span class="skill-label">震荡</span>
+      </div>
+      <div class="skill-btn skill4" id="skill4">
+        <span class="skill-icon">👊</span>
+        <span class="cooldown-text" id="cd4"></span>
+        <span class="skill-label">普攻</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 动态浮动摇杆 -->
+  <div class="joystick-area" id="joystick" style="display: none;">
+    <div class="joystick-knob" id="knob"></div>
+  </div>
+
+  <div class="game-over hidden" id="gameOver">
+    <h1 id="resultText">游戏结束</h1>
+    <button id="restartBtn">重新开始</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const hp1El = document.getElementById('hp1');
+  const hp2El = document.getElementById('hp2');
+  const p1NameLabel = document.getElementById('p1NameLabel');
+  const p2NameLabel = document.getElementById('p2NameLabel');
+  const gameOverEl = document.getElementById('gameOver');
+  const resultText = document.getElementById('resultText');
+  const restartBtn = document.getElementById('restartBtn');
+  const startScreen = document.getElementById('startScreen');
+  const startBtn = document.getElementById('startBtn');
+  const playerNameInput = document.getElementById('playerNameInput');
+  const enemyNameInput = document.getElementById('enemyNameInput');
+  const skillBtns = { 1: document.getElementById('skill1'), 2: document.getElementById('skill2'), 3: document.getElementById('skill3'), 4: document.getElementById('skill4') };
+  const cdTexts = { 1: document.getElementById('cd1'), 2: document.getElementById('cd2'), 3: document.getElementById('cd3'), 4: document.getElementById('cd4') };
+
+  let player, enemy, particles, fragments, rings, gameState, joystickState, keys, screenShake;
+  let isLooping = false; 
+  let bgTrees = []; // 背景剪影树
+
+  const CONFIG = {
+    speed: 3, enemySpeed: 1.3,
+    playerRadius: 15, enemyRadius: 15,
+    playerMaxHp: 100, enemyMaxHp: 150,
+    playerAttackRange: 120, enemyAttackRange: 80,    
+    playerAttackDamage: 8, enemyAttackDamage: 8,    
+    cooldown: { 1: 3, 2: 8, 3: 5, 4: 0.4 } 
+  };
+
+  let cooldowns = { 1: 0, 2: 0, 3: 0, 4: 0 }; 
+
+  function isValidName(name) {
+    return /^[\u4e00-\u9fa5a-zA-Z]{1,4}$/.test(name);
+  }
+
+  // 生成背景剪影树
+  function generateBackground() {
+    bgTrees = [];
+    const treeCount = 8;
+    for (let i = 0; i < treeCount; i++) {
+        bgTrees.push({
+            x: Math.random() * canvas.width,
+            width: 30 + Math.random() * 60,
+            height: 180 + Math.random() * 350,
+            branches: Math.floor(Math.random() * 3) + 2 // 树枝数量
+        });
+    }
+    // 按高度排序，保证远树覆盖近树（视觉层次感）
+    bgTrees.sort((a, b) => a.height - b.height);
+  }
+
+  function initGame(pName, eName) {
+    const finalPlayerName = isValidName(pName) ? pName : "";
+    const finalEnemyName = isValidName(eName) ? eName : "";
+
+    p1NameLabel.textContent = finalPlayerName || "你";
+    p2NameLabel.textContent = finalEnemyName || "敌人";
+
+    player = { x: canvas.width / 2, y: canvas.height - 180, hp: CONFIG.playerMaxHp, color: '#4ade80', name: finalPlayerName, shield: 0, attackState: 'idle', attackTimer: 0, hurtTimer: 0 };
+    enemy = { x: canvas.width / 2, y: 120, hp: CONFIG.enemyMaxHp, color: '#f87171', name: finalEnemyName, attackCd: 0, hurtTimer: 0, attackState: 'idle', attackTimer: 0 };
+    particles = []; fragments = []; rings = []; 
+    cooldowns = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    screenShake = 0;
+    gameState = 'playing';
+    joystickState = { active: false, dx: 0, dy: 0, startX: 0, startY: 0 };
+    gameOverEl.classList.add('hidden');
+    
+    generateBackground(); // 生成暗黑森林背景
+    updateUI(); updateSkillUI();
+
+    if (!isLooping) { isLooping = true; loop(); }
+  }
+
+  // --- 背景绘制（暗黑森林风格） ---
+  function drawBackground() {
+    // 1. 底层纯黑
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. 中景：半透明暗紫色渐变
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, 'rgba(25, 5, 35, 0.9)'); // 顶部暗紫
+    gradient.addColorStop(0.5, 'rgba(45, 15, 65, 0.6)'); // 中间稍亮
+    gradient.addColorStop(1, 'rgba(10, 2, 15, 0.95)'); // 底部深暗
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 3. 远景：暗紫色月亮（带光晕）
+    ctx.save();
+    ctx.shadowColor = 'rgba(120, 60, 180, 0.4)';
+    ctx.shadowBlur = 40;
+    ctx.fillStyle = 'rgba(60, 20, 80, 0.5)';
+    ctx.beginPath();
+    ctx.arc(360, 120, 50, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 4. 远景：黑色剪影树
+    ctx.fillStyle = '#000000';
+    ctx.strokeStyle = '#000000';
+    ctx.lineCap = 'round';
+
+    bgTrees.forEach(tree => {
+        // 树干
+        ctx.beginPath();
+        ctx.moveTo(tree.x, canvas.height);
+        ctx.lineTo(tree.x + tree.width * 0.3, canvas.height - tree.height * 0.4);
+        ctx.lineTo(tree.x + tree.width * 0.1, canvas.height - tree.height * 0.7);
+        ctx.lineTo(tree.x + tree.width * 0.5, canvas.height - tree.height);
+        ctx.lineTo(tree.x + tree.width * 0.7, canvas.height - tree.height * 0.6);
+        ctx.lineTo(tree.x + tree.width * 0.5, canvas.height - tree.height * 0.3);
+        ctx.lineTo(tree.x + tree.width, canvas.height);
+        ctx.closePath();
+        ctx.fill();
+
+        // 枯枝
+        for (let i = 0; i < tree.branches; i++) {
+            const branchY = canvas.height - tree.height * (0.3 + i * 0.2);
+            const branchX = tree.x + tree.width * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(branchX, branchY);
+            // 使用贝塞尔曲线或直线画出张牙舞爪的枯枝
+            ctx.lineTo(branchX + (Math.random() - 0.5) * 100, branchY - 20 - Math.random() * 40);
+            ctx.lineTo(branchX + (Math.random() - 0.5) * 120, branchY - 40 - Math.random() * 60);
+            ctx.lineWidth = 3 + Math.random() * 4;
+            ctx.stroke();
+        }
+    });
+  }
+
+  function drawFighter(cx, cy, name, color, hurtTimer, attackState, attackTimer, isEnemy, targetX) {
+    if (!cx || !cy) return;
+    const currentColor = hurtTimer > 0 ? '#ffffff' : color;
+    ctx.strokeStyle = currentColor; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    let bodyTwist = 0;
+    if (attackState === 'windup') bodyTwist = isEnemy ? 0.2 : -0.2;
+    else if (attackState === 'punch') bodyTwist = isEnemy ? -0.4 : 0.4;
+    else if (attackState === 'retract') bodyTwist = isEnemy ? -0.1 : 0.1;
+    const isFacingRight = targetX > cx;
+    
+    if (name && name.length > 0) {
+        ctx.fillStyle = currentColor; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const fontSize = name.length <= 2 ? 20 : 16;
+        ctx.font = `bold ${fontSize}px "Microsoft YaHei", Arial, sans-serif`;
+        ctx.fillText(name[0], cx, cy - 20);
+    } else { ctx.beginPath(); ctx.arc(cx, cy - 20, 10, 0, Math.PI * 2); ctx.stroke(); }
+    
+    if (name && name.length > 1) {
+        ctx.fillStyle = currentColor; ctx.font = `bold ${name.length <= 2 ? 20 : 16}px "Microsoft YaHei", Arial, sans-serif`;
+        ctx.fillText(name[1], cx, cy - 2);
+    } else {
+        ctx.save(); ctx.translate(cx, cy - 10); ctx.rotate(bodyTwist);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 20); ctx.stroke(); ctx.restore();
+    }
+
+    if (name && name.length > 2) {
+        ctx.fillStyle = currentColor; ctx.font = `bold 16px "Microsoft YaHei", Arial, sans-serif`;
+        ctx.fillText(name[2], cx, cy + 15);
+    } else {
+        ctx.beginPath(); ctx.moveTo(cx, cy + 10); ctx.lineTo(cx - 10, cy + 25); ctx.moveTo(cx, cy + 10); ctx.lineTo(cx + 10, cy + 25); ctx.stroke();
+    }
+    
+    if (name && name.length > 3) {
+        ctx.fillStyle = currentColor; ctx.font = `bold 16px "Microsoft YaHei", Arial, sans-serif`;
+        ctx.fillText(name[3], cx, cy + 32);
+    }
+
+    const baseArmLen = 18; let attackArmLen = baseArmLen; let attackShoulderAngle = 0;
+    if (attackState === 'idle') attackShoulderAngle = 0.5;
+    else if (attackState === 'windup') { attackShoulderAngle = -0.8; attackArmLen = 12; }
+    else if (attackState === 'punch') {
+        const t = attackTimer / 0.06; const easeT = 1 - Math.pow(1 - t, 3);
+        attackShoulderAngle = -0.8 + easeT * 2.2; attackArmLen = 18 + easeT * 36; 
+    } else if (attackState === 'retract') {
+        const t = attackTimer / 0.15; const easeT = 1 - Math.pow(1 - t, 2);
+        attackShoulderAngle = 1.4 * (1 - easeT); attackArmLen = 18 + 36 * (1 - easeT); 
+    }
+
+    const leftShoulderX = cx - 5; const rightShoulderX = cx + 5; const shoulderY = cy - 5;
+    if (isFacingRight) {
+        ctx.save(); ctx.translate(leftShoulderX, shoulderY); ctx.rotate(-0.5 + bodyTwist * 0.5);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(baseArmLen, 0); ctx.lineWidth = 4; ctx.strokeStyle = currentColor; ctx.stroke(); ctx.restore();
+        ctx.save(); ctx.translate(rightShoulderX, shoulderY); ctx.rotate(attackShoulderAngle);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(attackArmLen, 0); ctx.lineWidth = 4; ctx.strokeStyle = currentColor; ctx.stroke();
+        if (attackState === 'punch') {
+            ctx.beginPath(); ctx.arc(0, 0, attackArmLen * 1.2, -0.6, 0.6); ctx.strokeStyle = 'rgba(74, 222, 128, 0.4)'; ctx.lineWidth = 6; ctx.stroke();
+            ctx.beginPath(); ctx.arc(0, 0, attackArmLen * 1.5, -0.3, 0.3); ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; ctx.lineWidth = 2; ctx.stroke();
+        }
+        ctx.restore();
+    } else {
+        ctx.save(); ctx.translate(rightShoulderX, shoulderY); ctx.rotate(0.5 - bodyTwist * 0.5);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-baseArmLen, 0); ctx.lineWidth = 4; ctx.strokeStyle = currentColor; ctx.stroke(); ctx.restore();
+        ctx.save(); ctx.translate(leftShoulderX, shoulderY); ctx.rotate(-attackShoulderAngle);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-attackArmLen, 0); ctx.lineWidth = 4; ctx.strokeStyle = currentColor; ctx.stroke();
+        if (attackState === 'punch') {
+            ctx.beginPath(); ctx.arc(0, 0, attackArmLen * 1.2, Math.PI - 0.6, Math.PI + 0.6); ctx.strokeStyle = 'rgba(74, 222, 128, 0.4)'; ctx.lineWidth = 6; ctx.stroke();
+            ctx.beginPath(); ctx.arc(0, 0, attackArmLen * 1.5, Math.PI - 0.3, Math.PI + 0.3); ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; ctx.lineWidth = 2; ctx.stroke();
+        }
+        ctx.restore();
+    }
+  }
+
+  function spawnParticles(x, y, color, count, speed = 6) {
+    if (particles.length > 200) return;
+    for (let i = 0; i < count; i++) {
+      particles.push({ x, y, vx: (Math.random() - 0.5) * speed, vy: (Math.random() - 0.5) * speed, size: Math.random() * 4 + 2, color, life: 1.0, decay: 0.02 + Math.random() * 0.03 });
+    }
+  }
+  function spawnRing(x, y, color, maxRadius, speed) { rings.push({ x, y, radius: 5, maxRadius, color, speed, life: 1.0 }); }
+  function spawnFragments(x, y) {
+    for (let i = 0; i < 30; i++) {
+        const fx = x + (Math.random() - 0.5) * 60; const fy = y + (Math.random() - 0.5) * 80;
+        const angle = Math.atan2(fy - y, fx - x) + (Math.random() - 0.5) * 1.5; const speed = Math.random() * 4 + 2;
+        fragments.push({ x: fx, y: fy, targetX: x + (Math.random() - 0.5) * 40, targetY: y + (Math.random() - 0.5) * 40, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, size: Math.random() * 3 + 2, color: Math.random() > 0.5 ? '#f87171' : '#fbbf24', life: 1.0, phase: 'explode' });
+    }
+  }
+
+  function drawEffects() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life);
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      p.x += p.vx; p.y += p.vy; p.vx *= 0.96; p.vy *= 0.96; p.life -= p.decay;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+    for (let i = fragments.length - 1; i >= 0; i--) {
+      const f = fragments[i]; ctx.fillStyle = f.color; ctx.globalAlpha = Math.max(0, f.life);
+      ctx.fillRect(f.x - f.size/2, f.y - f.size/2, f.size, f.size);
+      if (f.phase === 'explode') { f.x += f.vx; f.y += f.vy; f.vx *= 0.95; f.vy *= 0.95; f.life -= 0.04; if (f.life < 0.5) f.phase = 'reassemble'; } 
+      else { const dx = f.targetX - f.x; const dy = f.targetY - f.y; f.x += dx * 0.15; f.y += dy * 0.15; f.life -= 0.02; if (f.life <= 0) fragments.splice(i, 1); }
+    }
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i]; ctx.strokeStyle = r.color; ctx.lineWidth = 3 * r.life; ctx.globalAlpha = r.life * 0.8;
+      ctx.beginPath(); ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2); ctx.stroke();
+      r.radius += r.speed; r.life -= 0.03; if (r.radius > r.maxRadius || r.life <= 0) rings.splice(i, 1);
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  function draw() {
+    if (!player || !enemy) return; 
+    ctx.save();
+    if (screenShake > 0) { ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake); screenShake *= 0.9; }
+    
+    // ★ 核心修改：绘制暗黑森林背景，替换原有的网格
+    drawBackground();
+    
+    drawEffects();
+    if (player.shield > 0) {
+      const pulse = 1 + Math.sin(Date.now() / 150) * 0.1; ctx.strokeStyle = `rgba(96, 165, 250, ${0.5 + Math.sin(Date.now() / 150) * 0.2})`;
+      ctx.lineWidth = 4; ctx.setLineDash([5, 10]); ctx.beginPath(); ctx.arc(player.x, player.y, (CONFIG.playerRadius + 12) * pulse, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
+    drawFighter(enemy.x, enemy.y, enemy.name, enemy.color, enemy.hurtTimer, enemy.attackState, enemy.attackTimer, true, player.x);
+    drawFighter(player.x, player.y, player.name, player.color, player.hurtTimer, player.attackState, player.attackTimer, false, enemy.x);
+    if (player.dashAlpha > 0) {
+        ctx.globalAlpha = player.dashAlpha * 0.5; ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(player.x - player.dashVX * 15, player.y - player.dashVY * 15, 15, 0, Math.PI * 2); ctx.stroke();
+        player.dashAlpha -= 0.1; ctx.globalAlpha = 1.0;
+    }
+    ctx.restore();
+  }
+
+  function performPlayerPunchHit() {
+    const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+    if (dist < CONFIG.playerAttackRange && dist > 0.1) { 
+        enemy.hp -= CONFIG.playerAttackDamage; enemy.hurtTimer = 0.6; 
+        if (enemy.name) spawnFragments(enemy.x, enemy.y); spawnParticles(enemy.x, enemy.y, '#ffffff', 10, 8); screenShake = 4; updateUI();
+    } else { const dx = enemy.x - player.x; const dy = enemy.y - player.y; const angle = Math.atan2(dy, dx); spawnParticles(player.x + Math.cos(angle)*40, player.y + Math.sin(angle)*40, '#94a3b8', 4, 4); }
+  }
+
+  function performEnemyPunchHit() {
+    const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+    if (dist < CONFIG.enemyAttackRange && dist > 0.1) { 
+        if (player.shield <= 0) {
+            player.hp -= CONFIG.enemyAttackDamage; player.hurtTimer = 0.4; 
+            spawnParticles(player.x, player.y, '#f87171', 15, 8); if (player.name) spawnFragments(player.x, player.y); screenShake = 8; updateUI();
+        } else { spawnParticles(player.x, player.y, '#60a5fa', 12, 6); screenShake = 3; }
+    }
+  }
+
+  function useSkill(id) {
+    if (!player || !enemy || cooldowns[id] > 0 || gameState !== 'playing') return;
+    if (id === 4) { cooldowns[4] = CONFIG.cooldown[4]; player.attackState = 'windup'; player.attackTimer = 0; return; }
+
+    if (id === 1) {
+      cooldowns[1] = CONFIG.cooldown[1];
+      let dirX = 0, dirY = -1;
+      if (joystickState.active && (joystickState.dx !== 0 || joystickState.dy !== 0)) { dirX = joystickState.dx; dirY = joystickState.dy; } 
+      else if (keys) { if (keys['w']) dirY = -1; if (keys['s']) dirY = 1; if (keys['a']) dirX = -1; if (keys['d']) dirX = 1; }
+      const mag = Math.hypot(dirX, dirY); if (mag > 0) { dirX /= mag; dirY /= mag; } else { dirX = 0; dirY = -1; }
+      player.dashAlpha = 1.0; player.dashVX = dirX; player.dashVY = dirY; player.x += dirX * 120; player.y += dirY * 120;
+      player.x = Math.max(25, Math.min(canvas.width - 25, player.x)); player.y = Math.max(50, Math.min(canvas.height - 25, player.y));
+      const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+      if (dist < 70 && dist > 0.1) { 
+          enemy.hp -= 25; spawnParticles(enemy.x, enemy.y, '#60a5fa', 20, 8); screenShake = 6; enemy.hurtTimer = 0.3; if (enemy.name) spawnFragments(enemy.x, enemy.y); updateUI(); 
+      }
+      spawnRing(player.x, player.y, '#60a5fa', 60, 5);
+    } 
+    else if (id === 2) { 
+      cooldowns[2] = CONFIG.cooldown[2]; player.shield = 3; player.hp = Math.min(CONFIG.playerMaxHp, player.hp + 15);
+      spawnParticles(player.x, player.y, '#fbbf24', 30, 4); spawnRing(player.x, player.y, '#fbbf24', 80, 6); screenShake = 3; updateUI();
+    } 
+    else if (id === 3) { 
+      cooldowns[3] = CONFIG.cooldown[3]; const range = 150;
+      spawnParticles(player.x, player.y, '#f472b6', 40, 10); spawnRing(player.x, player.y, '#f472b6', 180, 12); screenShake = 12;
+      const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+      if (dist < range && dist > 0.1) {
+        enemy.hp -= 35; spawnParticles(enemy.x, enemy.y, '#fff', 20, 15); enemy.hurtTimer = 0.4; updateUI(); if (enemy.name) spawnFragments(enemy.x, enemy.y); 
+      }
+    }
+    updateSkillUI();
+  }
+
+  function updateUI() {
+    if (!player || !enemy) return;
+    hp1El.style.width = Math.max(0, (player.hp / CONFIG.playerMaxHp) * 100) + '%';
+    hp2El.style.width = Math.max(0, (enemy.hp / CONFIG.enemyMaxHp) * 100) + '%';
+  }
+  
+  function updateSkillUI() {
+    for (let i = 1; i <= 4; i++) {
+      if (cooldowns[i] > 0) {
+        skillBtns[i].classList.add('cooldown');
+        if (i === 4) { cdTexts[i].textContent = ''; } 
+        else { cdTexts[i].textContent = Math.ceil(cooldowns[i]); }
+      } else {
+        skillBtns[i].classList.remove('cooldown');
+      }
+    }
+  }
+
+  function update() {
+    if (!player || !enemy || gameState !== 'playing') return;
+    let changed = false;
+    for (let i = 1; i <= 4; i++) { if (cooldowns[i] > 0) { cooldowns[i] -= 1/60; if (cooldowns[i] < 0) cooldowns[i] = 0; changed = true; } }
+    if (changed) updateSkillUI();
+
+    if (player.shield > 0) player.shield -= 1/60;
+    if (player.hurtTimer > 0) player.hurtTimer -= 1/60;
+    if (enemy.hurtTimer > 0) enemy.hurtTimer -= 1/60;
+
+    if (player.attackState !== 'idle') {
+        player.attackTimer += 1/60;
+        if (player.attackState === 'windup') { if (player.attackTimer > 0.1) { player.attackState = 'punch'; player.attackTimer = 0; performPlayerPunchHit(); } } 
+        else if (player.attackState === 'punch') { if (player.attackTimer > 0.06) { player.attackState = 'retract'; player.attackTimer = 0; } } 
+        else if (player.attackState === 'retract') { if (player.attackTimer > 0.15) { player.attackState = 'idle'; player.attackTimer = 0; } }
+    }
+    if (enemy.attackState !== 'idle') {
+        enemy.attackTimer += 1/60;
+        if (enemy.attackState === 'windup') { if (enemy.attackTimer > 0.1) { enemy.attackState = 'punch'; enemy.attackTimer = 0; performEnemyPunchHit(); } } 
+        else if (enemy.attackState === 'punch') { if (enemy.attackTimer > 0.06) { enemy.attackState = 'retract'; enemy.attackTimer = 0; } } 
+        else if (enemy.attackState === 'retract') { if (enemy.attackTimer > 0.15) { enemy.attackState = 'idle'; enemy.attackTimer = 0; } }
+    }
+
+    let moveX = 0, moveY = 0;
+    if (joystickState.active) { moveX = joystickState.dx || 0; moveY = joystickState.dy || 0; } 
+    else if (keys) {
+      if (keys['w'] || keys['arrowup']) moveY = -1; if (keys['s'] || keys['arrowdown']) moveY = 1;
+      if (keys['a'] || keys['arrowleft']) moveX = -1; if (keys['d'] || keys['arrowright']) moveX = 1;
+    }
+    if (moveX !== 0 || moveY !== 0) {
+      const mag = Math.hypot(moveX, moveY); moveX /= mag; moveY /= mag;
+      player.x += moveX * CONFIG.speed; player.y += moveY * CONFIG.speed;
+    }
+    player.x = isNaN(player.x) ? canvas.width / 2 : Math.max(25, Math.min(canvas.width - 25, player.x));
+    player.y = isNaN(player.y) ? canvas.height - 180 : Math.max(50, Math.min(canvas.height - 25, player.y));
+
+    let dx = player.x - enemy.x, dy = player.y - enemy.y;
+    let dist = Math.hypot(dx, dy); if (dist < 0.1) dist = 0.1;
+
+    if (dist > 20) { enemy.x += (dx / dist) * CONFIG.enemySpeed; enemy.y += (dy / dist) * CONFIG.enemySpeed; }
+    enemy.x = isNaN(enemy.x) ? canvas.width / 2 : Math.max(25, Math.min(canvas.width - 25, enemy.x));
+    enemy.y = isNaN(enemy.y) ? 120 : Math.max(50, Math.min(canvas.height - 25, enemy.y));
+
+    if (enemy.attackCd <= 0 && dist < CONFIG.enemyAttackRange && enemy.attackState === 'idle') {
+      enemy.attackCd = 1.5; enemy.attackState = 'windup'; enemy.attackTimer = 0;
+    }
+    if (enemy.attackCd > 0) enemy.attackCd -= 1/60;
+
+    if (player.hp <= 0) { 
+        gameState = 'over'; joystickState.active = false; document.getElementById('joystick').style.display = 'none';
+        const eName = enemy.name || "敌人"; const pName = player.name || "你";
+        resultText.textContent = `${eName} 击败了 ${pName}...`; gameOverEl.classList.remove('hidden'); 
+    }
+    if (enemy.hp <= 0) { 
+        gameState = 'over'; joystickState.active = false; document.getElementById('joystick').style.display = 'none';
+        const pName = player.name || "你"; const eName = enemy.name || "敌人";
+        resultText.textContent = `${pName} 击败了 ${eName}，胜利！`; gameOverEl.classList.remove('hidden'); 
+    }
+  }
+
+  function loop() { if (gameState === 'playing') update(); draw(); requestAnimationFrame(loop); }
+
+  // --- 输入控制 ---
+  keys = {};
+  window.addEventListener('keydown', e => {
+    if (!player) return; const k = e.key.toLowerCase();
+    if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrow
